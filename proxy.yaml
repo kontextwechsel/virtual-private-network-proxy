@@ -1,0 +1,133 @@
+proxy:
+  server: 172.16.0.1
+  listeners:
+    - name: IMAP
+      ports:
+        local: 143
+        remote: 143
+    - name: SMTP
+      ports:
+        local: 587
+        remote: 587
+
+vpn:
+  command: /usr/bin/openconnect
+  timeout: 120
+  arguments:
+    - --quiet
+    - --protocol=gp
+    - --disable-ipv6
+    - --servercert=pin-sha256:kNbimpPq/d9KFjpwj79z9pYmFS9Ebv2K6Zwt8awabc4=
+    - --certificate=/proxy/certificate.pem
+    - --sslkey=/proxy/certificate.key
+    - --user=user
+    - --key-password=PASS
+    - --csd-wrapper=/proxy/hip-report
+    - --script=/proxy/network-script
+    - 1.2.3.4
+  environment:
+    - name: OPENSSL_CONF
+      value: /proxy/openssl.cnf
+  input: |
+    password
+  files:
+    - path: /proxy/network-script
+      content: |
+        #!/bin/sh
+
+        case "${reason:?}" in
+          "pre-init")
+            if [ ! -d /dev/net ]; then
+              mkdir -p /dev/net
+            fi
+            if [ ! -e /dev/net/tun ]; then
+              mknod -m u=rw,g=r,o= /dev/net/tun c 10 200
+            fi
+            ;;
+          "connect")
+            ip addr add "${INTERNAL_IP4_ADDRESS}/32" peer "${INTERNAL_IP4_ADDRESS}" dev tun0
+            ip link set dev tun0 up mtu "${INTERNAL_IP4_MTU}"
+            ip route add "172.16.0.1" via "${INTERNAL_IP4_ADDRESS}" dev tun0
+            ;;
+        esac
+      executable: true
+    - path: /proxy/hip-report
+      content: |
+        #!/bin/sh
+
+        while [ "${1}" ]
+          do
+            if [ "${1}" = "--md5" ]
+              then
+                shift
+                echo "<hip-report><md5-sum>${1}</md5-sum></hip-report>"
+                exit 0
+            fi
+            shift
+          done
+        exit 1
+      executable: true
+    - path: /proxy/openssl.cnf
+      content: |
+        openssl_conf = openssl_init
+
+        [openssl_init]
+        ssl_conf = ssl_sect
+
+        [ssl_sect]
+        system_default = system_default_sect
+
+        [system_default_sect]
+        Options = UnsafeLegacyRenegotiation
+    - path: /proxy/certificate.pem
+      content: |
+        -----BEGIN CERTIFICATE-----
+        MIIDPTCCAiUCFE+qskyY1hpjLoVQN5QLt2l7w3mZMA0GCSqGSIb3DQEBCwUAMFox
+        CzAJBgNVBAYTAkRFMRAwDgYDVQQIDAdCYXZhcmlhMQ8wDQYDVQQHDAZNdW5pY2gx
+        DDAKBgNVBAoMA0lURDEaMBgGA1UEAwwRa29udGV4dHdlY2hzZWwuZGUwIBcNMjMx
+        MTExMDkxMzE5WhgPMjEyMzEwMTgwOTEzMTlaMFoxCzAJBgNVBAYTAkRFMRAwDgYD
+        VQQIDAdCYXZhcmlhMQ8wDQYDVQQHDAZNdW5pY2gxDDAKBgNVBAoMA0lURDEaMBgG
+        A1UEAwwRa29udGV4dHdlY2hzZWwuZGUwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAw
+        ggEKAoIBAQCz25GqzIrFCJI3hisuTVLVxTvLan8N4HuiSytvfMLCl6mO3A1HQfus
+        QqalJdMS4uYgNalC3uTScyZHRpBWeB7yfF4cpNIOZF943O4hQ0R2jXoQxOjpWKFn
+        KVlSiV3eQTYoVgEDbbqx2mts/3fmCEfXGYGs0CE0wCPWxoExzyse0Fes+fm+y47Q
+        8fwyLd++AWG1peoPPI5u5eHOhfhy4cD1YsnaU/2vsbg3xrcBEpWVi75H8hLEtSz2
+        UcjjprsGwgrJ4tr+1NmG2pB8nAVgSLvA+MLg7U/AX9H3EI3ji2wJuj82I6H4QGLs
+        xN/cfK0kVW+P+H8epSOajuAjd0BuCKHJAgMBAAEwDQYJKoZIhvcNAQELBQADggEB
+        AH0GI7lOnBsKlP0lFAE1q9Hz64sKo6zGu6Pnrx+YoQMAD+jnL1f3q9/W+EI2Fqmu
+        HGBKZzjRSlXsL0oXDwOuJJ4vBybXqN+U0rjsRoKFkKUj7K6z+aKt1ExcroCnz0Yj
+        o64rVYqVE2Ixm79atOQ7+ZTXpz4/oGQo1ltbL/8Qqq9NOgHEI4TD5wVXRpB4wRHb
+        HVr5zorV4v2peZwsB4APGtt8MrYWU+qOkVZ3hUsYsft9GvuSxTwLA3PPtl0hRJ+0
+        vm20QH4KEMbCW2phhl9qfiPLtz4FC1D3ci0vrdKSLaY7Ttwa350vmduAIeOQ+PUk
+        djrpoRRtNBi0++9DUzJCSkY=
+        -----END CERTIFICATE-----
+    - path: /proxy/certificate.key
+      content: |
+        -----BEGIN PRIVATE KEY-----
+        MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCz25GqzIrFCJI3
+        hisuTVLVxTvLan8N4HuiSytvfMLCl6mO3A1HQfusQqalJdMS4uYgNalC3uTScyZH
+        RpBWeB7yfF4cpNIOZF943O4hQ0R2jXoQxOjpWKFnKVlSiV3eQTYoVgEDbbqx2mts
+        /3fmCEfXGYGs0CE0wCPWxoExzyse0Fes+fm+y47Q8fwyLd++AWG1peoPPI5u5eHO
+        hfhy4cD1YsnaU/2vsbg3xrcBEpWVi75H8hLEtSz2UcjjprsGwgrJ4tr+1NmG2pB8
+        nAVgSLvA+MLg7U/AX9H3EI3ji2wJuj82I6H4QGLsxN/cfK0kVW+P+H8epSOajuAj
+        d0BuCKHJAgMBAAECggEADfDwJK5X96evV8JHW2kvHsv76Muk32E+DBQqC36pmmDx
+        nxXI/16VYLfw3V5mHZxnVz9O6FSeetPl9204N8T2Ac3ok0KmV+sT/b/C7eKeLldP
+        Nc4MOgwpRKBkoKcZAXw0s7czkGhjadui6zm5JDmSQfwjkaQ3XV9NrTKepeBSThVu
+        6TKvTTTIXppIuuakZJu7s7GTUZh18i3lLrecyV0/hrmJUL/1lFJ7b0QoGKoS5C6f
+        0TZqx/+nbIWEeAfaNhjZgLcjsdw0yK4gGLUJtVUldEnAatjBJP/7UuIKhO92BvLA
+        UGwfGY1Dsey87cM/w8EYE52JpRceUNNhTdNTxa3kFQKBgQDqzhdWrAoFVhgnyV6u
+        CKBLcSnO6B+S3qwbEYPQOg+CfLnd+DEIqyUUTxQ44RMZr3JSym0e3Q3wmYU14vv5
+        vv6yCZ4TxuQ4uNNR55ndZ0/0jSh+lwtxdQN/zPm7lPs/MZWzy97rqf4XZVRu/EcO
+        Maa4h3LE+Ck+27gury6ZgY7ZHQKBgQDEF78azKLcGErebsvCzGyXN9wNa4jvHgXc
+        MTuU3HNXAJIbg0NusIe7DG0y372XH8mjESAuSXjpCwhidjvdz3SmjX9WQ25CNitB
+        E54ujjj2TKS6ZmfEXKovaEufg7wO315lmiEw9zR+2Kp9fcAmXcYV5y0qqYnYTym0
+        Bs7DhbV3nQKBgBKaES9EoeaaU3+TbHTNKiXP6UgDC71O9sOON6sfbmsgBnmXWAsf
+        w+g/+5ImAqVeSOhWMR7o1FnjT7JdMSkwAG2KZYOblikIO3WZq47myGbPaA3fWYC7
+        jHNrgb1iqCTxgLKlzBtPdFnWJUJFqjtto4+q62S/ZEUekxDfwAlZQj/hAoGBAL4k
+        /KWC+wUK9UZdD240BbRYcSP+O0kKxsnuX4UIgztBDWxqSzABM4xYD2c+d7wcEczy
+        pU7c5cascRPw7Do4mTeLi4ddWYQQvL6cxE0Gkgua5DzvYf2RkWDo9DOYbPnK9OD2
+        pOqzOw8pD6EiF/ncAmFoym5M+aJrmNe9pi8H76AtAoGAPKRdtLGYQNbCNKg1YWIX
+        ZZQ0pDadlpTYKO6gdjB9k/t79Kto5H8+Vb7nK3W4T1JLWXUBnQouppt1vBjsBAUq
+        DkQaiktZmD0j1SmRfXxTnAACKy23KIrBVOwtHu3nyS1hQ/i/pf4HAllAu/lL1KjK
+        4ncjn40XxjkQ+x4lidtKqyE=
+        -----END PRIVATE KEY-----
