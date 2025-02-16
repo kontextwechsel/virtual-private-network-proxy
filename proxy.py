@@ -17,7 +17,7 @@ import time
 import yaml
 
 APPLICATION_NAME = "virtual-private-network-proxy"
-APPLICATION_VERSION = "1.0.0"
+APPLICATION_VERSION = "1.0.1"
 
 logging.config.dictConfig(
     {
@@ -151,9 +151,10 @@ class NetworkController:
 
 
 class ProxyServer:
-    def __init__(self, name, server, port, controller):
+    def __init__(self, name, server, timeout, port, controller):
         self.name = name
         self.server = server
+        self.timeout = timeout
         self.port = port
 
         self.controller = controller
@@ -171,14 +172,14 @@ class ProxyServer:
         try:
             await self.controller.connect()
             remote_reader, remote_writer = None, None
-            for i in range(10, 0, -1):
+            for _ in range(self.timeout):
                 try:
                     remote_reader, remote_writer = await asyncio.wait_for(
-                        asyncio.open_connection(self.server, self.port), 0.5
+                        asyncio.open_connection(self.server, self.port), 1
                     )
                     break
                 except (asyncio.TimeoutError, OSError):
-                    LOGGER.debug(f"[{self.name}] Connection failed: Sleeping 500ms...")
+                    LOGGER.debug(f"[{self.name}] Connection failed: Sleeping 1000ms...")
                     await asyncio.sleep(0.5)
             if remote_reader is None or remote_writer is None:
                 raise Exception("Retries exceeded")
@@ -278,7 +279,7 @@ def start():
         interface = "0.0.0.0"
         port = listener["ports"]["local"]
         proxy = ProxyServer(
-            name, config["proxy"]["server"], listener["ports"]["remote"], controller
+            name, config["proxy"]["server"], config["proxy"]["timeout"], listener["ports"]["remote"], controller
         )
         # noinspection PyTypeChecker
         servers.append(

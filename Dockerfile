@@ -10,4 +10,4 @@ ADD proxy.yaml /proxy/
 
 ENV PYTHONUNBUFFERED=1
 
-CMD /proxy/proxy.py -c /proxy/proxy.yaml
+CMD ["/proxy/proxy.py", "-c", "/proxy/proxy.yaml"]

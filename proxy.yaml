@@ -1,5 +1,6 @@
 proxy:
   server: 172.16.0.1
+  timeout: 30
   listeners:
     - name: IMAP
       ports:
